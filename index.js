@@ -17,6 +17,13 @@ const rl = readline.createInterface({ input: process.stdin, output: process.stdo
 const question = (text) => new Promise((resolve) => rl.question(text, resolve))
 const usePairingCode = true
 
+// === STORE (Chat Memory) ===
+const store = makeInMemoryStore({ logger: pino({ level: 'silent' }) })
+store.readFromFile('./store.json')
+setInterval(() => {
+    store.writeToFile('./store.json')
+}, 30_000)
+
 // === CONTACT MODE ===
 const warmodes = {
     key: {
@@ -27,14 +34,13 @@ const warmodes = {
     message: {
         contactMessage: {
             displayName: `𝑊𝑎𝑅 𝑀𝑜𝑑𝑒 (𝐴𝑐𝑡𝑖𝑣𝑒)`,
-            vcard: true,
-            thumbnailUrl: `https://files.catbox.moe/6y35hh.jpg`,
-            sendEphemeral: true
+            vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:War Mode\nTEL;type=CELL:+13135559098\nEND:VCARD`
         }
-    },
-    status: 1,
-    participant: "13135559098@s.whatsapp.net"
+    }
 }
+
+// === OWNER ===
+const ownerNumber = ["62xxxx@s.whatsapp.net"] // ganti nomor lo
 
 // === START CLIENT ===
 async function clientstart() {
@@ -85,18 +91,18 @@ async function clientstart() {
         logger: pino({ level: 'fatal' }),
         auth: {
             creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, pino().child({ level: 'silent', stream: 'store' }))
+            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
         }
     })
 
     // Pairing Code
-    if (!conn.authState.creds.registered) {
+    if (!state.creds.registered) {
         const phoneNumber = await question('Masukkan nomor WhatsApp kamu (contoh: 62xxx):\n')
         const code = await conn.requestPairingCode(phoneNumber.trim())
         console.log(chalk.blue.bold(`🔑 Kode Pairing Kamu: ${code}`))
     }
 
-    const store = makeInMemoryStore({ logger: pino().child({ level: 'silent', stream: 'store' }) })
+    // Bind store ke socket
     store.bind(conn.ev)
 
     conn.ev.on('creds.update', saveCreds)
@@ -131,17 +137,17 @@ async function clientstart() {
 
                     const menuMessage = {
                         text: `╭───❍ VonzieBot ❍───╮
-│
+│  
 │  乂  *MENU BOT*
-│
+│  
 │  ✦ !menu
 │  ✦ !ping
 │  ✦ !sticker
 │  ✦ !owner
-│
+│  
 │  ✦ *Quote Hari Ini:*
 │    "${randomQuote}"
-│
+│  
 ╰───────────────❍`
                     }
 
@@ -151,6 +157,14 @@ async function clientstart() {
 
                 case 'halo':
                     await conn.sendMessage(from, { text: 'Halo juga! 👋' })
+                    break
+
+                case 'ping':
+                    await conn.sendMessage(from, { text: '🏓 Pong!' })
+                    break
+
+                case 'owner':
+                    await conn.sendMessage(from, { text: `👑 Owner: ${ownerNumber.join(', ')}` })
                     break
 
                 case 'sticker':
@@ -183,7 +197,7 @@ async function clientstart() {
 
             // === FITUR EVAL (Owner only) ===
             const budy = pesan
-            const isOwner = from.endsWith('@s.whatsapp.net') // ganti sesuai nomor lo
+            const isOwner = ownerNumber.includes(msg.key.participant || from)
             if (budy.startsWith('>') && isOwner) {
                 try {
                     let evaled = await eval(budy.slice(1))
@@ -194,7 +208,7 @@ async function clientstart() {
                 }
             }
         } catch (err) {
-            console.log(require("util").format(err))
+            console.log(chalk.red("[ERROR]"), err)
         }
     })
 }
