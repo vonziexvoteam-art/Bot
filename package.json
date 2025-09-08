@@ -1,19 +1,31 @@
 {
-  "name": "🀄ZyuroXz🀄",
-  "version": "1.0",
-  "main": "index.js",
+  "name": "Vonzie Cry",
+  "version": "0",
+  "main": "bot.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node bot.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "github:seiren-primrose/PL-Baileys",
-    "moment": "^2.30.1",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@octokit/rest": "^18.12.0",
+    "@whiskeysockets/baileys": "github:Bealxvasion/xatanical-baileys",
+    "awesome-phonenumber": "^7.5.0",
     "axios": "^1.6.8",
     "chalk": "^4.1.2",
     "crypto": "^1.0.1",
     "dotenv": "^16.4.7",
+    "fluent-ffmpeg": "^2.1.3",
+    "fs-extra": "^11.2.0",
+    "human-readable": "^0.2.1",
+    "jimp": "^0.16.13",
+    "js-confuser": "latest",
+    "moment": "^2.30.1",
+    "moment-timezone": "^0.6.0",
     "node-telegram-bot-api": "^0.64.0",
-    "pino": "^9.6.0"
+    "node-webpmux": "^3.2.1",
+    "pino": "^9.6.0",
+    "randomcolor": "^0.6.2",
+    "systeminformation": "^5.23.10"
   },
   "keywords": [],
   "author": "",
