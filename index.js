@@ -5,60 +5,44 @@ const {
     makeInMemoryStore,
     downloadContentFromMessage,
     makeCacheableSignalKeyStore,
-    fetchLatestBaileysVersion
+    fetchLatestBaileysVersion // <== tambahin ini
 } = require('@whiskeysockets/baileys')
+
 const pino = require('pino')
 const fs = require('fs')
 const chalk = require('chalk')
+const fetch = require('node-fetch')
 const readline = require('readline')
 
-// === FUNCTION INPUT (Pairing Code) ===
+// === FUNCTION INPUT (untuk pairing code) ===
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
 const question = (text) => new Promise((resolve) => rl.question(text, resolve))
-const usePairingCode = true
+const usePairingCode = true;
 
-// === STORE (Chat Memory) ===
-const store = makeInMemoryStore({ logger: pino({ level: 'silent' }) })
-store.readFromFile('./store.json')
-setInterval(() => {
-    store.writeToFile('./store.json')
-}, 30_000)
-
-// === CONTACT MODE ===
+// === CONTOH CONTACT MODE ===
 const warmodes = {
     key: {
-        participant: `13135559098@s.whatsapp.net`,
-        remoteJid: "13135559098@s.whatsapp.net",
+        participant: `0@s.whatsapp.net`,
+        remoteJid: "status@broadcast",
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`
     },
     message: {
         contactMessage: {
-            displayName: `𝑊𝑎𝑅 𝑀𝑜𝑑𝑒 (𝐴𝑐𝑡𝑖𝑣𝑒)`,
-            vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:War Mode\nTEL;type=CELL:+13135559098\nEND:VCARD`
+            displayName: `𝑊𝑎𝑅 𝑀𝑜𝑑𝑒 ( 𝐴𝑐𝑡𝑖𝑣𝑒 )`,
+            vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:WarMode\nTEL;type=CELL;type=VOICE;waid=13135559098:+1 313-555-9098\nEND:VCARD`,
+            thumbnailUrl: `https://files.catbox.moe/6y35hh.jpg`,
+            sendEphemeral: true
         }
     }
 }
 
-// === OWNER ===
-const ownerNumber = ["62xxxx@s.whatsapp.net"] // ganti nomor lo
-
 // === START CLIENT ===
 async function clientstart() {
-    const { state, saveCreds } = await useMultiFileAuthState("session")
-
-    // Ambil versi WA
-    let version
-    try {
-        const fetchVer = await fetchLatestBaileysVersion()
-        version = fetchVer.version
-        console.log(chalk.green.bold(`✅ Using WA v${version.join('.')}`))
-    } catch (e) {
-        console.log(chalk.red.bold("⚠️ Gagal fetch versi WA, fallback ke versi manual"))
-        version = [2, 3000, 1015901307] // fallback manual
-    }
+    const { state, saveCreds } = await useMultiFileAuthState("session");
+    const { version } = await fetchLatestBaileysVersion();
 
     const conn = makeWASocket({
-        printQRInTerminal: !usePairingCode,
+        printQRInTerminal: false,
         syncFullHistory: true,
         markOnlineOnConnect: true,
         connectTimeoutMs: 60000,
@@ -70,42 +54,52 @@ async function clientstart() {
                 message.buttonsMessage ||
                 message.templateMessage ||
                 message.listMessage
-            )
+            );
             if (requiresPatch) {
                 message = {
                     viewOnceMessage: {
                         message: {
                             messageContextInfo: {
                                 deviceListMetadataVersion: 2,
-                                deviceListMetadata: {}
+                                deviceListMetadata: {},
                             },
-                            ...message
-                        }
-                    }
-                }
+                            ...message,
+                        },
+                    },
+                };
             }
-            return message
+            return message;
         },
         version,
-        browser: ["Ubuntu", "Chrome", "20.0.04"],
-        logger: pino({ level: 'fatal' }),
+        browser: ["VonzieBot", "Chrome", "20.0.04"],
+        logger: pino({ level: "silent" }),
         auth: {
             creds: state.creds,
-            keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
-        }
-    })
+            keys: makeCacheableSignalKeyStore(
+                state.keys,
+                pino().child({ level: "silent", stream: "store" })
+            ),
+        },
+    });
 
-    // Pairing Code
-    if (!state.creds.registered) {
-        const phoneNumber = await question('Masukkan nomor WhatsApp kamu (contoh: 62xxx):\n')
-        const code = await conn.requestPairingCode(phoneNumber.trim())
-        console.log(chalk.blue.bold(`🔑 Kode Pairing Kamu: ${code}`))
+    conn.ev.on("creds.update", saveCreds);
+
+    // =============== Pairing Code ===============
+    if (!conn.authState.creds.registered) {
+        const phoneNumber = await question("📱 Masukin nomor WhatsApp kamu (contoh: 62xxx):\n");
+        const code = await conn.requestPairingCode(phoneNumber.trim());
+        console.log(chalk.green.bold(`🔑 Pairing Code: ${code}`));
     }
 
-    // Bind store ke socket
-    store.bind(conn.ev)
-
-    conn.ev.on('creds.update', saveCreds)
+    // =============== Connection Update ===============
+    conn.ev.on("connection.update", ({ connection }) => {
+        if (connection === "close") {
+            console.log(chalk.red("❌ Koneksi terputus, mencoba reconnect..."));
+            clientstart();
+        } else if (connection === "open") {
+            console.log(chalk.green("✅ Bot berhasil connect ke WhatsApp!"));
+        }
+    });
 
     // === PESAN MASUK ===
     conn.ev.on('messages.upsert', async (m) => {
@@ -132,39 +126,31 @@ async function clientstart() {
                         "Sukses adalah hasil dari kerja keras.",
                         "Hari ini lebih baik dari kemarin.",
                         "Tetap semangat, masa depan menunggu!"
-                    ]
-                    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)]
+                    ];
+                    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
 
                     const menuMessage = {
                         text: `╭───❍ VonzieBot ❍───╮
-│  
+│
 │  乂  *MENU BOT*
-│  
+│
 │  ✦ !menu
 │  ✦ !ping
 │  ✦ !sticker
 │  ✦ !owner
-│  
+│
 │  ✦ *Quote Hari Ini:*
 │    "${randomQuote}"
-│  
+│
 ╰───────────────❍`
-                    }
+                    };
 
-                    await conn.sendMessage(from, menuMessage, { quoted: warmodes })
+                    await conn.sendMessage(from, menuMessage, { quoted: warmodes });
                 }
                     break
 
                 case 'halo':
                     await conn.sendMessage(from, { text: 'Halo juga! 👋' })
-                    break
-
-                case 'ping':
-                    await conn.sendMessage(from, { text: '🏓 Pong!' })
-                    break
-
-                case 'owner':
-                    await conn.sendMessage(from, { text: `👑 Owner: ${ownerNumber.join(', ')}` })
                     break
 
                 case 'sticker':
@@ -197,7 +183,8 @@ async function clientstart() {
 
             // === FITUR EVAL (Owner only) ===
             const budy = pesan
-            const isOwner = ownerNumber.includes(msg.key.participant || from)
+            const ownerNumber = "628xxxxxxx@s.whatsapp.net" // ganti nomor lo disini
+            const isOwner = msg.key.participant === ownerNumber || from === ownerNumber
             if (budy.startsWith('>') && isOwner) {
                 try {
                     let evaled = await eval(budy.slice(1))
@@ -208,7 +195,7 @@ async function clientstart() {
                 }
             }
         } catch (err) {
-            console.log(chalk.red("[ERROR]"), err)
+            console.log(require("util").format(err))
         }
     })
 }
