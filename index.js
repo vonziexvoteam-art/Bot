@@ -42,7 +42,7 @@ async function clientstart() {
     const { version } = await fetchLatestBaileysVersion();
 
     const conn = makeWASocket({
-        printQRInTerminal: false,
+        printQRInTerminal: !usePairingCode,
         syncFullHistory: true,
         markOnlineOnConnect: true,
         connectTimeoutMs: 60000,
