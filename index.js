@@ -4,20 +4,20 @@ const {
     DisconnectReason,
     makeInMemoryStore,
     downloadContentFromMessage,
-    makeCacheableSignalKeyStore
+    makeCacheableSignalKeyStore,
+    fetchLatestBaileysVersion
 } = require('@whiskeysockets/baileys')
-
 const pino = require('pino')
 const fs = require('fs')
 const chalk = require('chalk')
-const fetch = require('node-fetch')
 const readline = require('readline')
 
-// === FUNCTION INPUT (untuk pairing code) ===
+// === FUNCTION INPUT (Pairing Code) ===
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
 const question = (text) => new Promise((resolve) => rl.question(text, resolve))
-const usePairingCode = true;
-// === CONTOH CONTACT MODE ===
+const usePairingCode = true
+
+// === CONTACT MODE ===
 const warmodes = {
     key: {
         participant: `13135559098@s.whatsapp.net`,
@@ -26,7 +26,7 @@ const warmodes = {
     },
     message: {
         contactMessage: {
-            displayName: `𝑊𝑎𝑅 𝑀𝑜𝑑𝑒 ( 𝐴𝑐𝑡𝑖𝑣𝑒 )`,
+            displayName: `𝑊𝑎𝑅 𝑀𝑜𝑑𝑒 (𝐴𝑐𝑡𝑖𝑣𝑒)`,
             vcard: true,
             thumbnailUrl: `https://files.catbox.moe/6y35hh.jpg`,
             sendEphemeral: true
@@ -39,6 +39,17 @@ const warmodes = {
 // === START CLIENT ===
 async function clientstart() {
     const { state, saveCreds } = await useMultiFileAuthState("session")
+
+    // Ambil versi WA
+    let version
+    try {
+        const fetchVer = await fetchLatestBaileysVersion()
+        version = fetchVer.version
+        console.log(chalk.green.bold(`✅ Using WA v${version.join('.')}`))
+    } catch (e) {
+        console.log(chalk.red.bold("⚠️ Gagal fetch versi WA, fallback ke versi manual"))
+        version = [2, 3000, 1015901307] // fallback manual
+    }
 
     const conn = makeWASocket({
         printQRInTerminal: !usePairingCode,
@@ -69,9 +80,7 @@ async function clientstart() {
             }
             return message
         },
-        version: (await (await fetch(
-            'https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json'
-        )).json()).version,
+        version,
         browser: ["Ubuntu", "Chrome", "20.0.04"],
         logger: pino({ level: 'fatal' }),
         auth: {
@@ -87,9 +96,7 @@ async function clientstart() {
         console.log(chalk.blue.bold(`🔑 Kode Pairing Kamu: ${code}`))
     }
 
-    const store = makeInMemoryStore({
-        logger: pino().child({ level: 'silent', stream: 'store' })
-    })
+    const store = makeInMemoryStore({ logger: pino().child({ level: 'silent', stream: 'store' }) })
     store.bind(conn.ev)
 
     conn.ev.on('creds.update', saveCreds)
@@ -113,33 +120,33 @@ async function clientstart() {
 
             switch (command) {
                 case 'menu': {
-          const quotes = [
-            "Hidup adalah perjalanan, bukan tujuan.",
-            "Jangan menyerah, setiap usaha pasti ada hasil.",
-            "Sukses adalah hasil dari kerja keras.",
-            "Hari ini lebih baik dari kemarin.",
-            "Tetap semangat, masa depan menunggu!"
-          ];
-          const randomQuote = quotes[Math.floor(Math.random() * quotes.length)];
-        
-          const menuMessage = {
-            text: `╭───❍ VonzieBot ❍───╮
-        │
-        │  乂  *MENU BOT*
-        │
-        │  ✦ !menu
-        │  ✦ !ping
-        │  ✦ !sticker
-        │  ✦ !owner
-        │
-        │  ✦ *Quote Hari Ini:*
-        │    "${randomQuote}"
-        │
-        ╰───────────────❍`
-          };
-        
-          await conn.sendMessage(from, menuMessage, { quoted: warmodes });
-        }
+                    const quotes = [
+                        "Hidup adalah perjalanan, bukan tujuan.",
+                        "Jangan menyerah, setiap usaha pasti ada hasil.",
+                        "Sukses adalah hasil dari kerja keras.",
+                        "Hari ini lebih baik dari kemarin.",
+                        "Tetap semangat, masa depan menunggu!"
+                    ]
+                    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)]
+
+                    const menuMessage = {
+                        text: `╭───❍ VonzieBot ❍───╮
+│
+│  乂  *MENU BOT*
+│
+│  ✦ !menu
+│  ✦ !ping
+│  ✦ !sticker
+│  ✦ !owner
+│
+│  ✦ *Quote Hari Ini:*
+│    "${randomQuote}"
+│
+╰───────────────❍`
+                    }
+
+                    await conn.sendMessage(from, menuMessage, { quoted: warmodes })
+                }
                     break
 
                 case 'halo':
@@ -176,7 +183,7 @@ async function clientstart() {
 
             // === FITUR EVAL (Owner only) ===
             const budy = pesan
-            const isOwner = from.endsWith('@s.whatsapp.net') // ganti validasi owner sesuai nomor lo
+            const isOwner = from.endsWith('@s.whatsapp.net') // ganti sesuai nomor lo
             if (budy.startsWith('>') && isOwner) {
                 try {
                     let evaled = await eval(budy.slice(1))
